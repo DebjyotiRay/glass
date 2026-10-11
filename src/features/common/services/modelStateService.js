@@ -102,12 +102,15 @@ class ModelStateService extends EventEmitter {
     }
 
     async handleLocalAIStateChange(service, state) {
-        console.log(`[ModelStateService] LocalAI state changed: ${service}`, state);
-        if (!state.installed || !state.running) {
-            const types = service === 'ollama' ? ['llm'] : service === 'whisper' ? ['stt'] : [];
-            await this._autoSelectAvailableModels(types);
+        const activeType = service === 'ollama' ? 'llm' : 'stt';
+        const activeInfo = await this.getCurrentModelInfo(activeType);
+        
+        // Only trigger auto-reselection if the currently active model is actually using this local service
+        if (activeInfo && activeInfo.provider === service && (!state.installed || !state.running)) {
+            console.log(`[ModelStateService] LocalAI state changed for active provider ${service}:`, state);
+            await this._autoSelectAvailableModels([activeType]);
+            this.emit('state-updated', await this.getLiveState());
         }
-        this.emit('state-updated', await this.getLiveState());
     }
 
     async getLiveState() {

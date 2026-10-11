@@ -69,6 +69,9 @@ npm run setup
 **Currently Supporting:**
 - OpenAI API: Get OpenAI API Key [here](https://platform.openai.com/api-keys)
 - Gemini API: Get Gemini API Key [here](https://aistudio.google.com/apikey)
+- Anthropic Claude API: Get Anthropic API Key [here](https://console.anthropic.com/)
+- Deepgram STT API: Get Deepgram API Key [here](https://console.deepgram.com/)
+- DeepSeek API: Get DeepSeek API Key [here](https://platform.deepseek.com/)
 - Local LLM Ollama & Whisper
 
 ### Liquid Glass Design (coming soon)

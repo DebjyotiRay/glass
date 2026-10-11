@@ -13,8 +13,8 @@ These are the fundamental rules that govern the entire application.
 1.  **Centralized Data Logic**: All data persistence logic (reading from or writing to a database) is centralized within the **Electron Main Process**. The UI layers (both Electron's renderer and the web dashboard) are forbidden from accessing data sources directly.
 2.  **Feature-Based Modularity**: Code is organized by feature (`src/features`) to promote encapsulation and separation of concerns. A new feature should be self-contained within its own directory.
 3.  **Dual-Database Repositories**: The data access layer uses a **Repository Pattern** that abstracts away the underlying database. Every repository that handles user data **must** have two implementations: one for the local `SQLite` database and one for the cloud `Firebase` database. Both must expose an identical interface.
-4.  **AI Provider Abstraction**: AI model interactions are abstracted using a **Factory Pattern**. To add a new provider (e.g., a new LLM), you only need to create a new provider module that conforms to the base interface in `src/common/ai/providers/` and register it in the `factory.js`.
-5.  **Single Source of Truth for Schema**: The schema for the local SQLite database is defined in a single location: `src/common/config/schema.js`. Any change to the database structure **must** be updated here.
+4.  **AI Provider Abstraction**: AI model interactions (LLMs and STT providers) are abstracted using a **Factory Pattern**. To add a new provider (e.g. OpenAI, Gemini, Anthropic, Deepgram, DeepSeek, Ollama, Whisper), create a provider module in `src/features/common/ai/providers/` and register it in `src/features/common/ai/factory.js`.
+5.  **Single Source of Truth for Schema**: The schema for the local SQLite database is defined in a single location: `src/features/common/config/schema.js`. Any change to the database structure **must** be updated here.
 6.  **Encryption by Default**: All sensitive user data **must** be encrypted before being persisted to Firebase. This includes, but is not limited to, API keys, conversation titles, transcription text, and AI-generated summaries. This is handled automatically by the `createEncryptedConverter` Firestore helper.
 
 ---
@@ -75,6 +75,26 @@ graph TD
     style G fill:#E8DAEF,stroke:#8E44AD
     style H fill:#FADBD8,stroke:#E74C3C
 ```
+
+
+### 3. AI & STT Provider Integration Architecture
+
+All artificial intelligence capabilities (LLM prompt completion, streaming responses, and real-time STT speech-to-text) follow a unified provider abstraction managed in `src/features/common/ai/`.
+
+- **Factory Registry** (`src/features/common/ai/factory.js`): Maps provider names to provider modules and exposes standard instantiation methods: `createLLM`, `createStreamingLLM`, `createSTT`, and `getProviderClass`.
+- **Provider Implementations** (`src/features/common/ai/providers/*.js`):
+  - `openai.js`: Supports GPT models & OpenAI Realtime STT.
+  - `gemini.js`: Supports Gemini models & Gemini Live preview.
+  - `anthropic.js`: Supports Claude Sonnet & Haiku models.
+  - `deepgram.js`: Supports Deepgram WebSocket Realtime STT (`nova-3`, `nova-2`).
+  - `deepseek.js`: Supports DeepSeek Chat (V3) & DeepSeek Reasoner (R1) models.
+  - `ollama.js` & `whisper.js`: Support local LLM and local Whisper STT models.
+
+#### How to Add a New AI Provider
+1. Create `src/features/common/ai/providers/<provider>.js`.
+2. Export a class `<ProviderName>Provider` with a static `validateApiKey(key)` method.
+3. Export `createLLM`, `createStreamingLLM`, and `createSTT` handlers (return warning placeholders if a capability is not supported).
+4. Register the new provider entry in `PROVIDERS` and `classNameMap` in `src/features/common/ai/factory.js`.
 
 ---
 

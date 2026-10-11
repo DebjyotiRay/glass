@@ -12,7 +12,7 @@ class DeepgramProvider {
      * @param {string} key - 검사할 Deepgram API 키
      * @returns {Promise<{success: boolean, error?: string}>}
      */
-    static async validateApiKey(key) {
+    static async validateApiKey(key = process.env.DEEPGRAM_API_KEY) {
         if (!key || typeof key !== 'string') {
             return { success: false, error: 'Invalid Deepgram API key format.' };
         }
@@ -37,7 +37,7 @@ class DeepgramProvider {
 }
 
 function createSTT({
-    apiKey,
+    apiKey = process.env.DEEPGRAM_API_KEY,
     language = 'en-US',
     sampleRate = 24000,
     callbacks = {},

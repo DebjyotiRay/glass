@@ -63,8 +63,18 @@ const PROVIDERS = {
     llmModels: [],
     sttModels: [
         { id: 'nova-3', name: 'Nova-3 (General)' },
-        ],
-    },
+        { id: 'nova-2', name: 'Nova-2 (General)' },
+    ],
+  },
+  'deepseek': {
+      name: 'DeepSeek',
+      handler: () => require("./providers/deepseek"),
+      llmModels: [
+          { id: 'deepseek-chat', name: 'DeepSeek Chat (V3)' },
+          { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner (R1)' },
+      ],
+      sttModels: [],
+  },
   'ollama': {
       name: 'Ollama (Local)',
       handler: () => require("./providers/ollama"),
@@ -157,6 +167,7 @@ function getProviderClass(providerId) {
         'anthropic': 'AnthropicProvider',
         'gemini': 'GeminiProvider',
         'deepgram': 'DeepgramProvider',
+        'deepseek': 'DeepSeekProvider',
         'ollama': 'OllamaProvider',
         'whisper': 'WhisperProvider'
     };
