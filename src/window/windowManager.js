@@ -6,6 +6,10 @@ const os = require('os');
 const shortcutsService = require('../features/shortcuts/shortcutsService');
 const internalBridge = require('../bridge/internalBridge');
 const permissionRepository = require('../features/common/repositories/permission');
+const { createIntegratedWindow, getShellWindow } = require('./integratedWindow');
+
+// INTEGRATE_GLASS: single shell window hosting all views (see integratedWindow.js)
+const isIntegrated = () => !!process.env.INTEGRATE_GLASS;
 
 /* ────────────────[ GLASS BYPASS ]─────────────── */
 let liquidGlass;
@@ -33,6 +37,7 @@ let lastVisibleWindows = new Set(['header']);
 
 let currentHeaderState = 'apikey';
 const windowPool = new Map();
+let integratedControllerReady = false;
 
 let settingsHideTimer = null;
 
@@ -42,6 +47,7 @@ let movementManager = null;
 
 
 function updateChildWindowLayouts(animated = true) {
+    if (isIntegrated()) return; // layout is CSS in the shell
     // if (movementManager.isAnimating) return;
 
     const visibleWindows = {};
@@ -73,6 +79,7 @@ const cancelHideSettingsWindow = () => {
 };
 
 const moveWindowStep = (direction) => {
+    if (isIntegrated()) return; // single window: no step movement
     internalBridge.emit('window:moveStep', { direction });
 };
 
@@ -85,6 +92,10 @@ const handleHeaderAnimationFinished = (state) => {
 };
 
 const getHeaderPosition = () => {
+    if (isIntegrated()) {
+        const shell = getShellWindow();
+        return Promise.resolve(shell ? shell.getBounds() : { x: 0, y: 0, width: 0, height: 0 });
+    }
     return new Promise((resolve) => {
         internalBridge.emit('window:getHeaderPosition', (position) => {
             resolve(position);
@@ -93,6 +104,7 @@ const getHeaderPosition = () => {
 };
 
 const moveHeaderTo = (newX, newY) => {
+    if (isIntegrated()) return; // single window: header is not independently movable
     internalBridge.emit('window:moveHeaderTo', { newX, newY });
 };
 
@@ -102,6 +114,7 @@ const adjustWindowHeight = (winName, targetHeight) => {
 
 
 function setupWindowController(windowPool, layoutManager, movementManager) {
+    const integrated = isIntegrated();
     internalBridge.on('window:requestVisibility', ({ name, visible }) => {
         handleWindowVisibilityRequest(windowPool, layoutManager, movementManager, name, visible);
     });
@@ -109,6 +122,7 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
         changeAllWindowsVisibility(windowPool, targetVisibility);
     });
     internalBridge.on('window:moveToDisplay', ({ displayId }) => {
+        if (integrated) return;
         // movementManager.moveToDisplay(displayId);
         const header = windowPool.get('header');
         if (header) {
@@ -121,6 +135,7 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
         }
     });
     internalBridge.on('window:moveToEdge', ({ direction }) => {
+        if (integrated) return;
         const header = windowPool.get('header');
         if (header) {
             const newPosition = layoutManager.calculateEdgePosition(header, direction);
@@ -131,6 +146,7 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
     });
 
     internalBridge.on('window:moveStep', ({ direction }) => {
+        if (integrated) return;
         const header = windowPool.get('header');
         if (header) { 
             const newHeaderPosition = layoutManager.calculateStepMovePosition(header, direction);
@@ -156,6 +172,11 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
 
     internalBridge.on('window:resizeHeaderWindow', ({ width, height }) => {
         const header = windowPool.get('header');
+        if (isIntegrated()) {
+            // Integrated: let the shell resize the header view via CSS
+            if (header) header.setSize(width, height);
+            return;
+        }
         if (!header || movementManager.isAnimating) return;
 
         const newHeaderBounds = layoutManager.calculateHeaderResize(header, { width, height });
@@ -173,6 +194,7 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
     internalBridge.on('window:headerAnimationFinished', (state) => {
         const header = windowPool.get('header');
         if (!header || header.isDestroyed()) return;
+        if (integrated) return; // header view stays mounted; global toggle hides the shell
 
         if (state === 'hidden') {
             header.hide();
@@ -189,6 +211,7 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
         }
     });
     internalBridge.on('window:moveHeaderTo', ({ newX, newY }) => {
+        if (integrated) return;
         const header = windowPool.get('header');
         if (header) {
             const newPosition = layoutManager.calculateClampedPosition(header, { x: newX, y: newY });
@@ -198,6 +221,11 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
     internalBridge.on('window:adjustWindowHeight', ({ winName, targetHeight }) => {
         console.log(`[Layout Debug] adjustWindowHeight: targetHeight=${targetHeight}`);
         const senderWindow = windowPool.get(winName);
+        if (isIntegrated()) {
+            // Integrated: shell resizes the view (height only)
+            if (senderWindow) senderWindow.setSize(undefined, targetHeight);
+            return;
+        }
         if (senderWindow) {
             const newBounds = layoutManager.calculateWindowHeightAdjustment(senderWindow, targetHeight);
             
@@ -238,9 +266,13 @@ function changeAllWindowsVisibility(windowPool, targetVisibility) {
         if (win && !win.isDestroyed()) win.hide();
       });
       header.hide();
+      // Integrated: also hide the shell window itself
+      if (isIntegrated()) getShellWindow()?.hide();
   
       return;
     }
+
+    if (isIntegrated()) getShellWindow()?.show();
   
     lastVisibleWindows.forEach(name => {
       const win = windowPool.get(name);
@@ -272,6 +304,13 @@ async function handleWindowVisibilityRequest(windowPool, layoutManager, movement
             console.log(`[WindowManager] Window '${name}' is already in the desired state.`);
             return;
         }
+    }
+
+    if (isIntegrated()) {
+        // Integrated: views are webviews in the shell; just toggle them (CSS handles layout)
+        if (shouldBeVisible) win.show();
+        else win.hide();
+        return;
     }
 
     const disableClicks = (selectedWindow) => {
@@ -413,6 +452,9 @@ const setContentProtection = (status) => {
             win.setContentProtection(isContentProtectionOn);
         }
     });
+    // Integrated: protect the single shell window
+    const shellWin = getShellWindow();
+    if (shellWin) shellWin.setContentProtection(isContentProtectionOn);
 };
 
 const getContentProtectionStatus = () => isContentProtectionOn;
@@ -638,6 +680,24 @@ function getCurrentDisplay(window) {
 
 
 function createWindows() {
+    if (process.env.INTEGRATE_GLASS) {
+        const pool = createIntegratedWindow(windowPool);
+        if (!integratedControllerReady) {
+            // Layout/movement managers are unused here (layout is CSS in the shell)
+            setupWindowController(windowPool, null, null);
+            integratedControllerReady = true;
+        }
+        const header = windowPool.get('header');
+        if (header && !header._shortcutsHooked) {
+            header._shortcutsHooked = true;
+            // Wire shortcuts once the header guest webContents is bound
+            header.once('webcontents-bound', () => {
+                shortcutsService.initialize(windowPool);
+                shortcutsService.registerShortcuts();
+            });
+        }
+        return pool;
+    }
     const HEADER_HEIGHT        = 47;
     const DEFAULT_WINDOW_WIDTH = 353;
 
@@ -780,6 +840,18 @@ function setupIpcHandlers(windowPool, layoutManager) {
 const handleHeaderStateChanged = (state) => {
     console.log(`[WindowManager] Header state changed to: ${state}`);
     currentHeaderState = state;
+
+    if (isIntegrated()) {
+        // Feature views always exist in the shell; only hide them outside 'main'
+        if (state !== 'main') {
+            for (const name of ['listen', 'ask', 'settings', 'shortcut-settings']) {
+                const w = windowPool.get(name);
+                if (w && !w.isDestroyed()) w.hide();
+            }
+        }
+        internalBridge.emit('reregister-shortcuts');
+        return;
+    }
 
     if (state === 'main') {
         createFeatureWindows(windowPool.get('header'));

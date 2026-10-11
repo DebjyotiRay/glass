@@ -11,6 +11,7 @@ if (require('electron-squirrel-startup')) {
     process.exit(0);
 }
 
+const { broadcast } = require('./window/broadcast');
 const { app, BrowserWindow, shell, ipcMain, dialog, desktopCapturer, session } = require('electron');
 const { createWindows } = require('./window/windowManager.js');
 const listenService = require('./features/listen/listenService');
@@ -585,11 +586,9 @@ function handlePersonalizeFromUrl(params) {
         console.log(`[Custom URL] Navigating to personalize page: ${personalizeUrl}`);
         header.webContents.loadURL(personalizeUrl);
         
-        BrowserWindow.getAllWindows().forEach(win => {
-            win.webContents.send('enter-personalize-mode', {
-                message: 'Personalization mode activated',
-                params: params
-            });
+        broadcast('enter-personalize-mode', {
+            message: 'Personalization mode activated',
+            params: params
         });
     } else {
         console.error('[Custom URL] Header window not found for personalize');

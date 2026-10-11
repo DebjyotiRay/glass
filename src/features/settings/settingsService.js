@@ -1,4 +1,5 @@
 const { ipcMain, BrowserWindow } = require('electron');
+const { broadcast } = require('../../window/broadcast');
 const Store = require('electron-store');
 const authService = require('../common/services/authService');
 const settingsRepository = require('./repositories');
@@ -120,6 +121,16 @@ class WindowNotificationManager {
     }
 
     getRelevantWindows(windowTypes) {
+        // Integrated mode: pool holds VirtualWindows (not in BrowserWindow.getAllWindows)
+        if (process.env.INTEGRATE_GLASS) {
+            const result = [];
+            for (const [windowName, poolWindow] of windowPool || []) {
+                if (!windowTypes.includes(windowName) || poolWindow.isDestroyed()) continue;
+                if (windowName === 'settings' || poolWindow.isVisible()) result.push(poolWindow);
+            }
+            return result;
+        }
+
         const allWindows = BrowserWindow.getAllWindows();
         const relevantWindows = [];
 
@@ -340,11 +351,7 @@ async function saveApiKey(apiKey, provider = 'openai') {
         await modelStateService.setApiKey(provider, apiKey);
         
         // Notify windows
-        BrowserWindow.getAllWindows().forEach(win => {
-            if (!win.isDestroyed()) {
-                win.webContents.send('api-key-validated', apiKey);
-            }
-        });
+        broadcast('api-key-validated', apiKey);
         
         return { success: true };
     } catch (error) {
@@ -368,11 +375,7 @@ async function removeApiKey() {
         }
         
         // Notify windows
-        BrowserWindow.getAllWindows().forEach(win => {
-            if (!win.isDestroyed()) {
-                win.webContents.send('api-key-removed');
-            }
-        });
+        broadcast('api-key-removed');
         
         console.log('[SettingsService] API key removed for all providers');
         return { success: true };

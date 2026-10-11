@@ -1,5 +1,6 @@
 // src/bridge/featureBridge.js
-const { ipcMain, app, BrowserWindow } = require('electron');
+const { ipcMain, app } = require('electron');
+const { broadcast } = require('../window/broadcast');
 const settingsService = require('../features/settings/settingsService');
 const authService = require('../features/common/services/authService');
 const whisperService = require('../features/common/services/whisperService');
@@ -134,48 +135,24 @@ module.exports = {
     // LocalAIManager 이벤트를 모든 윈도우에 브로드캐스트
     localAIManager.on('install-progress', (service, data) => {
       const event = { service, ...data };
-      BrowserWindow.getAllWindows().forEach(win => {
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('localai:install-progress', event);
-        }
-      });
+      broadcast('localai:install-progress', event);
     });
     localAIManager.on('installation-complete', (service) => {
-      BrowserWindow.getAllWindows().forEach(win => {
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('localai:installation-complete', { service });
-        }
-      });
+      broadcast('localai:installation-complete', { service });
     });
     localAIManager.on('error', (error) => {
-      BrowserWindow.getAllWindows().forEach(win => {
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('localai:error-occurred', error);
-        }
-      });
+      broadcast('localai:error-occurred', error);
     });
     // Handle error-occurred events from LocalAIManager's error handling
     localAIManager.on('error-occurred', (error) => {
-      BrowserWindow.getAllWindows().forEach(win => {
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('localai:error-occurred', error);
-        }
-      });
+      broadcast('localai:error-occurred', error);
     });
     localAIManager.on('model-ready', (data) => {
-      BrowserWindow.getAllWindows().forEach(win => {
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('localai:model-ready', data);
-        }
-      });
+      broadcast('localai:model-ready', data);
     });
     localAIManager.on('state-changed', (service, state) => {
       const event = { service, ...state };
-      BrowserWindow.getAllWindows().forEach(win => {
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('localai:service-status-changed', event);
-        }
-      });
+      broadcast('localai:service-status-changed', event);
     });
 
     // 주기적 상태 동기화 시작
@@ -183,25 +160,13 @@ module.exports = {
 
     // ModelStateService 이벤트를 모든 윈도우에 브로드캐스트
     modelStateService.on('state-updated', (state) => {
-      BrowserWindow.getAllWindows().forEach(win => {
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('model-state:updated', state);
-        }
-      });
+      broadcast('model-state:updated', state);
     });
     modelStateService.on('settings-updated', () => {
-      BrowserWindow.getAllWindows().forEach(win => {
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('settings-updated');
-        }
-      });
+      broadcast('settings-updated');
     });
     modelStateService.on('force-show-apikey-header', () => {
-      BrowserWindow.getAllWindows().forEach(win => {
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('force-show-apikey-header');
-        }
-      });
+      broadcast('force-show-apikey-header');
     });
 
     // LocalAI 통합 핸들러 추가

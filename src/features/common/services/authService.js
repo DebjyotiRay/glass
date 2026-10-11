@@ -1,5 +1,6 @@
 const { onAuthStateChanged, signInWithCustomToken, signOut } = require('firebase/auth');
-const { BrowserWindow, shell } = require('electron');
+const { shell } = require('electron');
+const { broadcast } = require('../../../window/broadcast');
 const { getFirebaseAuth } = require('./firebaseClient');
 const fetch = require('node-fetch');
 const encryptionService = require('./encryptionService');
@@ -168,11 +169,7 @@ class AuthService {
     broadcastUserState() {
         const userState = this.getCurrentUser();
         console.log('[AuthService] Broadcasting user state change:', userState);
-        BrowserWindow.getAllWindows().forEach(win => {
-            if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
-                win.webContents.send('user-state-changed', userState);
-            }
-        });
+        broadcast('user-state-changed', userState);
     }
 
     getCurrentUserId() {
